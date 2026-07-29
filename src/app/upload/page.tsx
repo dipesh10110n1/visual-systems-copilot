@@ -153,6 +153,7 @@ export default function UploadPage() {
       setAnalysisPhase("Completed");
       await new Promise((resolve) => setTimeout(resolve, 500));
 
+      localStorage.removeItem("visual-copilot-chat");
       router.push("/dashboard");
     } catch (error) {
       console.error(error);
@@ -164,6 +165,7 @@ export default function UploadPage() {
 
   const handleDemo = () => {
     localStorage.setItem("vsc-analysis", JSON.stringify(demoAnalysis));
+    localStorage.removeItem("visual-copilot-chat");
     pushToast({ title: "Demo workspace loaded", description: "Sample architecture, network, UML, whiteboard, and PDF context is ready.", type: "success" });
     router.push("/dashboard");
   };
