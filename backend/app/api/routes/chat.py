@@ -34,7 +34,9 @@ async def chat(request: ChatRequest):
     combined_text = "\n\n".join(extracted_chunks)
     prompt = f"""
 You are an engineering systems assistant.
-Use the uploaded files and the latest analysis context below to answer the user's question.
+You must ONLY answer questions based on the uploaded files and architecture context below. Do not use outside knowledge. 
+If the user asks a question unrelated to the architecture or context, politely decline to answer.
+
 User question: {request.message}
 
 Uploaded files content:
@@ -43,18 +45,13 @@ Uploaded files content:
 Latest analysis context:
 {json.dumps(analysis_context, indent=2)}
 
-Return valid JSON with a single key named "answer" and a concise but useful explanation.
+Return your answer directly in plain text or markdown formatting. Do not wrap it in JSON.
 """
 
     reply_text = client.chat_reply(prompt)
-    try:
-        parsed = json.loads(reply_text)
-        answer = parsed.get("answer") or parsed.get("reply") or reply_text
-    except (TypeError, ValueError):
-        answer = reply_text
 
     return {
-        "reply": answer,
+        "reply": reply_text.strip(),
         "status": "ok",
         "used_context": True,
     }

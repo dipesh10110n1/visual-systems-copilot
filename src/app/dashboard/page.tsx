@@ -1,38 +1,298 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
-import { Activity, AlertTriangle, ArrowUpRight, BrainCircuit, CheckCircle2, Clock3, Cpu, FileStack, GitBranch, Sparkles } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
-import { demoAnalysis, loadAnalysis } from "@/lib/analysis";
+import { Activity, AlertTriangle, Sparkles, Send, User, Bot, HelpCircle, Network, Cpu, Info, Maximize2, ZoomIn, ZoomOut, Settings } from "lucide-react";
+import { loadAnalysis, demoAnalysis } from "@/lib/analysis";
+import { motion } from "framer-motion";
+import ReactFlow, { Background, Controls, MarkerType, useNodesState, useEdgesState } from 'reactflow';
+import 'reactflow/dist/style.css';
 
-const confidenceStyle = (score = 0) => score >= 90 ? "text-emerald-400 border-emerald-500/30 bg-emerald-500/10" : score >= 75 ? "text-amber-400 border-amber-500/30 bg-amber-500/10" : "text-rose-400 border-rose-500/30 bg-rose-500/10";
+// Types
+interface Message {
+  role: "user" | "assistant";
+  content: string;
+}
 
-export default function DashboardPage() {
-  const [analysis] = useState(() => loadAnalysis());
-  const [why, setWhy] = useState<string | null>(null);
-  const [loadingWhy, setLoadingWhy] = useState(false);
+export default function WorkspacePage() {
+  const [isMounted, setIsMounted] = useState(false);
+  const [analysis, setAnalysis] = useState(demoAnalysis);
+
+  useEffect(() => {
+    const loaded = loadAnalysis();
+    if (loaded) setAnalysis(loaded);
+    setIsMounted(true);
+  }, []);
+
   const metadata = analysis.Metadata || demoAnalysis.Metadata!;
   const health = analysis.Health || demoAnalysis.Health!;
-  const askWhy = async (risk: (typeof analysis.Risks)[number]) => {
-    setLoadingWhy(true); setWhy(null);
-    try { const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/insights/why`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ insight: risk }) }); const data = await res.json(); setWhy(data.explanation); }
-    catch { setWhy(risk.rationale || "This conclusion is based on relationships and labels found across the uploaded engineering assets."); }
-    finally { setLoadingWhy(false); }
+  
+  // Graph State
+  const [rfNodes, setRfNodes, onNodesChange] = useNodesState<any[]>([]);
+  const [rfEdges, setRfEdges, onEdgesChange] = useEdgesState<any[]>([]);
+  const [selectedNode, setSelectedNode] = useState<any | null>(null);
+
+  // Chat State
+  const initialMessages: Message[] = [
+    { role: "assistant", content: `Hello! I have reviewed your ${metadata.files_processed?.length || 0} uploaded documents and generated the interactive graph. What questions do you have about the architecture?` }
+  ];
+  
+  const [messages, setMessages] = useState<Message[]>([]);
+  
+  useEffect(() => {
+    const saved = localStorage.getItem("visual-copilot-chat");
+    if (saved) {
+      try {
+        setMessages(JSON.parse(saved));
+      } catch (e) {
+        setMessages(initialMessages);
+      }
+    } else {
+      setMessages(initialMessages);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (messages.length > 0) {
+      localStorage.setItem("visual-copilot-chat", JSON.stringify(messages));
+    }
+  }, [messages]);
+  const [input, setInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!analysis.Components) return;
+    const generatedNodes = analysis.Components.map((c, i) => {
+      const cols = 2;
+      const row = Math.floor(i / cols);
+      const col = i % cols;
+      const risk = c.risk_level || "";
+      const status = risk.includes("Critical") || risk.includes("High") ? "Critical" : risk.includes("Medium") ? "Warning" : "Healthy";
+      
+      return {
+        id: c.name,
+        position: { x: col * 280, y: row * 150 },
+        data: { 
+          label: (
+            <div className="flex flex-col gap-1">
+              <div className="flex justify-between items-center text-[10px] font-mono text-zinc-400">
+                <span>{c.type || "Service"}</span>
+                <span className={`w-2 h-2 rounded-full ${status === "Healthy" ? "bg-emerald-500" : status === "Warning" ? "bg-yellow-500" : "bg-rose-500 animate-pulse"}`} />
+              </div>
+              <strong className="text-sm text-white">{c.name}</strong>
+              <span className="text-[10px] text-zinc-500 truncate">{c.technology || "Unknown"}</span>
+            </div>
+          ),
+          rawDetails: { type: c.type || "Service", status, tech: c.technology || "Unknown" },
+          rawName: c.name
+        },
+        style: { 
+          background: '#18181b', 
+          color: '#fff', 
+          border: '1px solid #27272a', 
+          borderRadius: '12px', 
+          padding: '12px',
+          width: 200,
+          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.5)'
+        }
+      };
+    });
+    
+    const generatedEdges = analysis.Relationships?.map((r, i) => ({
+      id: `e-${i}`,
+      source: r.from_component || r.source,
+      target: r.to_component || r.target,
+      animated: true,
+      style: { stroke: '#4f46e5', strokeWidth: 2 },
+      markerEnd: {
+        type: MarkerType.ArrowClosed,
+        color: '#4f46e5',
+      },
+    })) || [];
+    
+    setRfNodes(generatedNodes);
+    setRfEdges(generatedEdges);
+  }, [analysis]);
+
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [messages]);
+
+  const sendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() || isLoading) return;
+    
+    const userMsg = input.trim();
+    setInput("");
+    setMessages(prev => [...prev, { role: "user", content: userMsg }]);
+    setIsLoading(true);
+
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: userMsg }),
+      });
+      const data = await res.json();
+      setMessages(prev => [...prev, { role: "assistant", content: data.reply }]);
+    } catch (err) {
+      setMessages(prev => [...prev, { role: "assistant", content: "Error connecting to Copilot API." }]);
+    } finally {
+      setIsLoading(false);
+    }
   };
-  const stages = ["Reading Files", "Extracting Text", "Understanding Diagrams", "Finding Relationships", "Reasoning Across Documents", "Generating Documentation", "Completed"];
-  return <DashboardLayout><div className="mx-auto max-w-7xl space-y-6">
-    <section className="flex flex-col gap-4 rounded-3xl border border-zinc-800 bg-gradient-to-br from-indigo-500/10 via-zinc-950 to-zinc-950 p-6 lg:flex-row lg:items-center lg:justify-between">
-      <div><div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[.2em] text-indigo-300"><BrainCircuit className="h-4 w-4" /> Gemma Reasoning</div><h1 className="text-2xl font-bold text-white">One system understanding, across {metadata.files_processed?.length || 0} artifacts.</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-400">{analysis.Summary}</p></div>
-      <Link href="/graph" className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-black hover:bg-zinc-200">Explore graph <ArrowUpRight className="h-4 w-4" /></Link>
-    </section>
-    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-      {[[FileStack, "Files processed", String(metadata.files_processed?.length || 0)], [Cpu, "Components", String(analysis.Components.length)], [GitBranch, "Relationships", String(analysis.Relationships.length)], [AlertTriangle, "Risk signals", String(analysis.Risks.length)], [Clock3, "Processing", `${((metadata.processing_time_ms || 0) / 1000).toFixed(1)}s`]].map(([Icon, label, value]) => { const I = Icon as typeof Cpu; return <div key={String(label)} className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4"><I className="h-4 w-4 text-indigo-400" /><p className="mt-4 text-xl font-bold text-white">{value as string}</p><p className="text-xs text-zinc-500">{label as string}</p></div>; })}
-    </section>
-    <section className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-sm font-semibold text-white">Reasoning timeline</h2><p className="mt-1 text-xs text-zinc-500">Model: {metadata.model || "Gemma 4"} · overall confidence {metadata.confidence || 0}%</p></div><span className="inline-flex items-center gap-1 text-xs text-emerald-400"><CheckCircle2 className="h-4 w-4" /> Complete</span></div><div className="mt-5 grid gap-2 md:grid-cols-7">{stages.map((stage, index) => <div key={stage} className="flex items-center gap-2 text-[11px] text-zinc-300"><span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-500/20 text-indigo-300">{index + 1}</span>{stage}</div>)}</div></section>
-    <section className="grid gap-6 xl:grid-cols-[1.2fr_.8fr]"><div className="rounded-3xl border border-zinc-800 bg-zinc-950/60 p-6"><div className="flex items-center justify-between"><h2 className="text-lg font-bold text-white">Discovered components</h2><span className={`rounded-full border px-2 py-1 text-[10px] font-bold ${confidenceStyle(metadata.confidence)}`}>{metadata.confidence}% confidence</span></div><div className="mt-4 space-y-3">{analysis.Components.map((component) => <div key={component.name} className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-semibold text-white">{component.name}</p><p className="mt-1 text-xs text-zinc-500">{component.type} · {component.technology || "Technology not identified"}</p></div><span className={`rounded-full border px-2 py-1 text-[10px] font-semibold ${confidenceStyle(component.confidence)}`}>{component.confidence || 0}%</span></div><p className="mt-2 text-sm text-zinc-400">{component.description || component.detail}</p></div>)}</div></div>
-      <div className="rounded-3xl border border-zinc-800 bg-zinc-950/60 p-6"><div className="flex items-center gap-2"><Activity className="h-5 w-5 text-emerald-400" /><h2 className="text-lg font-bold text-white">Architecture health</h2></div><div className="mt-5 flex items-center gap-5"><div className="flex h-24 w-24 items-center justify-center rounded-full border-8 border-indigo-500/40 text-2xl font-bold text-white">{health.overall}</div><p className="text-sm text-zinc-400">Overall score reflects evidence found across the complete workspace.</p></div><div className="mt-6 space-y-3">{Object.entries(health).filter(([name]) => name !== "overall").map(([name, score]) => <div key={name}><div className="mb-1 flex justify-between text-xs text-zinc-400"><span className="capitalize">{name}</span><span>{score}</span></div><div className="h-1.5 overflow-hidden rounded-full bg-zinc-800"><div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-emerald-400" style={{ width: `${score}%` }} /></div></div>)}</div></div></section>
-    <section className="grid gap-6 lg:grid-cols-2"><div className="rounded-3xl border border-zinc-800 bg-zinc-950/60 p-6"><div className="flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-amber-400" /><h2 className="text-lg font-bold text-white">Risk analysis</h2></div><div className="mt-4 space-y-3">{analysis.Risks.map(risk => <div key={risk.title} className="rounded-2xl border border-zinc-800 p-4"><div className="flex justify-between gap-3"><p className="font-semibold text-white">{risk.title}</p><span className="text-xs font-bold text-rose-400">{risk.severity}</span></div><p className="mt-2 text-sm text-zinc-400">{risk.description}</p><button onClick={() => askWhy(risk)} className="mt-3 text-xs font-semibold text-indigo-300 hover:text-white">Why? →</button></div>)}</div></div><div className="rounded-3xl border border-zinc-800 bg-zinc-950/60 p-6"><div className="flex items-center gap-2"><Sparkles className="h-5 w-5 text-indigo-400" /><h2 className="text-lg font-bold text-white">Recommendations</h2></div><div className="mt-4 space-y-3">{analysis.Recommendations.map(item => <div key={item.title} className="rounded-2xl border border-zinc-800 p-4"><p className="font-semibold text-white">{item.title}</p><p className="mt-1 text-sm text-zinc-400">{item.description}</p></div>)}</div></div></section>
-    {why !== null || loadingWhy ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"><div className="max-w-lg rounded-2xl border border-indigo-500/30 bg-zinc-950 p-6 shadow-2xl"><h3 className="font-bold text-white">Why Gemma flagged this</h3><p className="mt-3 text-sm leading-6 text-zinc-300">{loadingWhy ? "Reviewing the cross-document evidence…" : why}</p><button onClick={() => setWhy(null)} className="mt-5 rounded-lg border border-zinc-700 px-3 py-2 text-xs text-zinc-300">Close</button></div></div> : null}
-  </div></DashboardLayout>;
+
+  if (!isMounted) {
+    return (
+      <DashboardLayout>
+        <div className="h-[calc(100vh-8rem)] flex items-center justify-center">
+           <div className="w-8 h-8 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin"></div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  return (
+    <DashboardLayout>
+      <div className="h-[calc(100vh-8rem)] flex gap-4">
+        {/* Left Pane: Graph & Analysis */}
+        <div className="flex-1 flex flex-col gap-4 min-w-0 overflow-y-auto pr-2 pb-4">
+          
+          <div className="flex items-center justify-between">
+            <h1 className="text-xl font-bold tracking-tight text-white">System Architecture</h1>
+            <span className="px-2 py-1 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded-md text-xs font-semibold">
+              Gemma 4 Multimodal Analysis
+            </span>
+          </div>
+
+          {/* ReactFlow Interactive Graph */}
+          <div className="h-[400px] shrink-0 border border-zinc-800 rounded-xl bg-zinc-950 relative overflow-hidden">
+            <ReactFlow 
+              nodes={rfNodes} 
+              edges={rfEdges}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onNodeClick={(_, node) => setSelectedNode(node)}
+              fitView
+              className="bg-zinc-950/40"
+            >
+              <Background color="#27272a" gap={16} size={1} />
+              <Controls className="bg-zinc-900 border-zinc-800 fill-zinc-400 [&>button]:border-b-zinc-800 [&>button:hover]:bg-zinc-800" />
+            </ReactFlow>
+          </div>
+
+          {/* Risk & Components Analysis */}
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 shrink-0">
+            {/* Risks */}
+            <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <AlertTriangle className="h-4 w-4 text-amber-400" />
+                <h2 className="text-sm font-bold text-white">Identified Risks</h2>
+              </div>
+              <div className="space-y-3">
+                {analysis.Risks?.map(risk => (
+                  <div key={risk.title} className="rounded-lg border border-zinc-800 bg-zinc-900/30 p-3">
+                    <div className="flex justify-between gap-3 mb-1">
+                      <p className="font-semibold text-xs text-white">{risk.title}</p>
+                      <span className="text-[10px] font-bold text-rose-400">{risk.severity}</span>
+                    </div>
+                    <p className="text-[11px] text-zinc-400">{risk.description}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Selected Node Details */}
+            <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <Cpu className="h-4 w-4 text-emerald-400" />
+                <h2 className="text-sm font-bold text-white">Node Inspector</h2>
+              </div>
+              {selectedNode ? (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-bold text-white">{selectedNode.data.rawName}</h3>
+                    <span className="text-xs font-mono text-zinc-500 bg-zinc-900 px-2 py-1 rounded">{selectedNode.data.rawDetails.type}</span>
+                  </div>
+                  <div className="p-3 rounded-lg bg-zinc-900/50 border border-zinc-800">
+                    <p className="text-xs text-zinc-400 mb-2"><span className="text-zinc-300 font-semibold">Status:</span> {selectedNode.data.rawDetails.status}</p>
+                    <p className="text-xs text-zinc-400 mb-2"><span className="text-zinc-300 font-semibold">Tech:</span> {selectedNode.data.rawDetails.tech}</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="h-24 flex items-center justify-center text-center">
+                  <p className="text-xs text-zinc-500 italic">Select a node from the interactive graph to view details.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Right Pane: Copilot Chat */}
+        <div className="w-[400px] shrink-0 border border-zinc-800 rounded-xl bg-zinc-950/80 flex flex-col overflow-hidden shadow-2xl relative">
+          <div className="absolute inset-0 bg-gradient-to-b from-indigo-500/5 to-transparent pointer-events-none" />
+          
+          <div className="p-4 border-b border-zinc-800/80 flex items-center justify-between bg-zinc-900/40 relative z-10">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-indigo-700 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                <Sparkles className="w-4 h-4 text-white" />
+              </div>
+              <div>
+                <h2 className="text-sm font-bold text-white leading-tight">Engineering Copilot</h2>
+                <p className="text-[10px] text-zinc-400 font-mono">Gemma 4 • Context Locked</p>
+              </div>
+            </div>
+          </div>
+
+          <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4 relative z-10">
+            {messages.map((msg, i) => (
+              <div key={i} className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
+                <div className={`w-6 h-6 rounded-md flex items-center justify-center shrink-0 mt-1 ${msg.role === "user" ? "bg-zinc-800" : "bg-indigo-500/20 text-indigo-400 border border-indigo-500/20"}`}>
+                  {msg.role === "user" ? <User className="w-3.5 h-3.5 text-zinc-400" /> : <Bot className="w-3.5 h-3.5" />}
+                </div>
+                <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${msg.role === "user" ? "bg-zinc-800 text-white rounded-tr-sm" : "bg-zinc-900/60 border border-zinc-800 text-zinc-300 rounded-tl-sm whitespace-pre-wrap"}`}>
+                  {msg.content}
+                </div>
+              </div>
+            ))}
+            {isLoading && (
+              <div className="flex gap-3">
+                <div className="w-6 h-6 rounded-md bg-indigo-500/20 border border-indigo-500/20 flex items-center justify-center shrink-0 mt-1">
+                  <Bot className="w-3.5 h-3.5 text-indigo-400" />
+                </div>
+                <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl rounded-tl-sm px-4 py-3 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: "0ms" }} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: "150ms" }} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: "300ms" }} />
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="p-3 bg-zinc-900/60 border-t border-zinc-800 relative z-10">
+            <form onSubmit={sendMessage} className="relative">
+              <input
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="Ask about the architecture..."
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-4 pr-12 py-3 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-all"
+              />
+              <button
+                type="submit"
+                disabled={!input.trim() || isLoading}
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg bg-indigo-500 text-white flex items-center justify-center hover:bg-indigo-600 disabled:opacity-50 disabled:hover:bg-indigo-500 transition-colors"
+              >
+                <Send className="w-3.5 h-3.5" />
+              </button>
+            </form>
+            <p className="text-[10px] text-zinc-500 text-center mt-2">
+              Responses are locked strictly to the uploaded architecture.
+            </p>
+          </div>
+        </div>
+      </div>
+    </DashboardLayout>
+  );
 }

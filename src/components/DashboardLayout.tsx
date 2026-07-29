@@ -32,40 +32,22 @@ interface SidebarLink {
 
 const navigationLinks: SidebarLink[] = [
   {
-    name: "Dashboard",
-    href: "/dashboard",
-    icon: LayoutDashboard,
-    description: "Overview & system analytics",
-  },
-  {
-    name: "Upload Workspace",
+    name: "Upload",
     href: "/upload",
     icon: UploadCloud,
     description: "Upload system specifications",
   },
   {
-    name: "Knowledge Graph",
-    href: "/graph",
-    icon: Network,
-    description: "Interactive system structure map",
-  },
-  {
-    name: "Engineering Chat",
-    href: "/chat",
-    icon: MessageSquare,
-    description: "AI architecture copilot assistant",
+    name: "Copilot Workspace",
+    href: "/dashboard",
+    icon: LayoutDashboard,
+    description: "Unified AI workspace",
   },
   {
     name: "Documentation",
     href: "/docs",
     icon: FileText,
-    description: "System specification & logs",
-  },
-  {
-    name: "Why Gemma?",
-    href: "/gemma",
-    icon: Sparkles,
-    description: "How multimodal reasoning powers the review",
+    description: "System specification",
   },
 ];
 

@@ -1,38 +1,66 @@
-# visual-systems-copilot
+# Visual Systems Copilot 🧠📐
 
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+*Built for the IEEE CS SRMIST KTR "Build with Gemma" Hackathon — VisionWorks Track.*
 
-## Getting Started
+Visual Systems Copilot is an intelligent engineering tool that turns static architecture diagrams into interactive, living Knowledge Graphs. Powered entirely by the multimodal reasoning capabilities of **Gemma 4**, this application ingests raw architecture images alongside textual infrastructure notes, reasons across them holistically, and automatically generates a topological graph of your system.
 
-First, run the development server:
+## ✨ Key Features
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+- **Multimodal Ingestion:** Upload any architecture diagram (`.png`, `.jpg`, `.pdf`) and infrastructure notes simultaneously.
+- **Automated Knowledge Graph Generation:** Gemma 4's vision capabilities analyze the uploaded diagram, identify microservices, databases, gateways, and their exact relationships, and reconstruct them into an interactive ReactFlow topology map.
+- **Risk & SPOF Detection:** The AI automatically scans the topological data to identify Single Points of Failure, latency bottlenecks, and un-replicated databases.
+- **System Copilot Chat:** Chat directly with the AI about your architecture. The AI retains the full context of the visual diagram you uploaded.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 🛠️ Tech Stack
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- **AI Model:** Gemma 4 (`gemma-4-31b-it`) via the Gemini Developer API (`google-genai` SDK).
+- **Backend:** Python, FastAPI, Uvicorn, Pillow (for image processing).
+- **Frontend:** Next.js (App Router), ReactFlow, Tailwind CSS, Framer Motion.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 🚀 Getting Started
 
-## Learn More
+### 1. Backend Setup
 
-To learn more about Next.js, take a look at the following resources:
+The backend handles the multimodal integration with Gemma 4.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Navigate to the backend directory:
+   ```bash
+   cd backend
+   ```
+2. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. Add your Google API Key:
+   Create a `.env` file in the `backend/` directory and add your key:
+   ```env
+   GEMINI_API_KEY=your_actual_api_key_here
+   GEMMA_MODEL=gemma-4-31b-it
+   ```
+4. Start the FastAPI server:
+   ```bash
+   python -m uvicorn app.main:app --reload --env-file .env
+   ```
+   The backend will run on `http://127.0.0.1:8000`.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### 2. Frontend Setup
 
-## Deploy on Vercel
+The frontend provides the dashboard, interactive graph, and copilot chat.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+1. Navigate to the root directory (or open a new terminal in the root).
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Start the Next.js development server:
+   ```bash
+   npm run dev
+   ```
+4. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 🧪 How to use it
+
+1. Go to the **Upload** page in the web app.
+2. Upload a sample architecture diagram image.
+3. Click **Process** and wait ~40 seconds for Gemma to reason across the image.
+4. Navigate to the **Knowledge Graph** tab to explore the dynamically generated topology mapped out directly from your image!
