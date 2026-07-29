@@ -12,7 +12,10 @@ class GemmaClient:
         api_key = os.getenv("GEMINI_API_KEY")
         if api_key:
             genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel("gemini-2.0-flash")
+        # Keep the model selectable: hackathon deployments can point this at their
+        # approved Gemma endpoint without changing application code.
+        self.model_name = os.getenv("GEMMA_MODEL", "gemma-3-27b-it")
+        self.model = genai.GenerativeModel(self.model_name) if api_key else None
 
     def analyze_payload(self, prompt: str) -> dict[str, Any]:
         if not os.getenv("GEMINI_API_KEY"):
@@ -21,10 +24,12 @@ class GemmaClient:
                 "Components": [],
                 "Relationships": [],
                 "Risks": [],
-                "Recommendations": []
+                "Recommendations": [],
+                "Metadata": {"model": self.model_name, "confidence": 0},
+                "Health": {},
             }
 
-        response = self.model.generate_content(prompt)
+        response = self.model.generate_content(prompt, generation_config={"response_mime_type": "application/json"})
         text = getattr(response, "text", "") or ""
         try:
             return json.loads(text)

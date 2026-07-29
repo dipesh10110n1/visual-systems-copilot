@@ -1,4 +1,4 @@
-import json
+import time
 from fastapi import APIRouter
 
 from app.core.extractor import extractor
@@ -10,9 +10,10 @@ router = APIRouter(prefix="/analyze", tags=["analyze"])
 
 @router.post("")
 async def analyze_data():
+    started = time.perf_counter()
     uploaded_files = store.get_latest_files()
     if not uploaded_files:
-        return {"Summary": "No files were uploaded.", "Components": [], "Relationships": [], "Risks": [], "Recommendations": []}
+        return {"Summary": "No files were uploaded.", "Components": [], "Relationships": [], "Risks": [], "Recommendations": [], "Metadata": {}, "Health": {}}
 
     extracted_chunks = []
     for item in uploaded_files:
@@ -24,14 +25,27 @@ async def analyze_data():
     prompt = f"""
 You are analyzing engineering documents and images for a system architecture review.
 Use the combined content from all uploaded files below.
-Extract the system architecture, components, relationships, risks, and recommendations.
+Reason across ALL files as one system. Do not analyze them independently. Extract architecture,
+components, APIs, databases, services, authentication, data flows, dependencies, missing links,
+risks, bottlenecks, and recommendations. State only evidence-supported conclusions.
 Return valid JSON with exactly these top-level keys:
-Summary, Components, Relationships, Risks, Recommendations.
+Summary, Components, Relationships, Risks, Recommendations, Metadata, Health.
+Components items: name, type, description, technology, dependencies, risk_level, confidence (0-100).
+Relationships items: from_component, to_component, description, confidence (0-100).
+Risks items: severity (Critical|High|Medium|Low), title, description, rationale, confidence (0-100).
+Metadata: confidence (0-100), files_processed (array of names), model. Health: overall, security,
+performance, scalability, maintainability, reliability (each 0-100).
 
 Files content:
 {combined_text}
 """
 
     payload = client.analyze_payload(prompt)
+    payload.setdefault("Metadata", {})
+    payload["Metadata"].update({
+        "files_processed": [item["filename"] for item in uploaded_files],
+        "processing_time_ms": round((time.perf_counter() - started) * 1000),
+        "model": getattr(client, "model_name", "Gemma"),
+    })
     store.save_analysis(payload)
     return payload

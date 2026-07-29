@@ -17,7 +17,8 @@ import {
   ChevronRight,
   Database,
   Terminal,
-  Activity
+  Activity,
+  Sparkles
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { PageTransition } from "@/components/PageTransition";
@@ -59,6 +60,12 @@ const navigationLinks: SidebarLink[] = [
     href: "/docs",
     icon: FileText,
     description: "System specification & logs",
+  },
+  {
+    name: "Why Gemma?",
+    href: "/gemma",
+    icon: Sparkles,
+    description: "How multimodal reasoning powers the review",
   },
 ];
 

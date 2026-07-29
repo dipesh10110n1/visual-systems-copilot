@@ -1,256 +1,38 @@
 "use client";
 
-import React from "react";
-import DashboardLayout from "@/components/DashboardLayout";
-import {
-  ArrowUpRight,
-  AlertTriangle,
-  Code2,
-  Cpu,
-  Lightbulb,
-  Lock,
-  Server,
-  Terminal,
-  Workflow,
-  ShieldCheck,
-  Sparkles,
-} from "lucide-react";
+import { useState } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { Activity, AlertTriangle, ArrowUpRight, BrainCircuit, CheckCircle2, Clock3, Cpu, FileStack, GitBranch, Sparkles } from "lucide-react";
+import DashboardLayout from "@/components/DashboardLayout";
+import { demoAnalysis, loadAnalysis } from "@/lib/analysis";
+
+const confidenceStyle = (score = 0) => score >= 90 ? "text-emerald-400 border-emerald-500/30 bg-emerald-500/10" : score >= 75 ? "text-amber-400 border-amber-500/30 bg-amber-500/10" : "text-rose-400 border-rose-500/30 bg-rose-500/10";
 
 export default function DashboardPage() {
-  const gemmaOutput = {
-    summary:
-      "A distributed enterprise platform with edge gateways, internal services, and a secure data layer. The architecture prioritizes availability, traceability, and controlled access across cloud regions.",
-    components: [
-      { name: "Edge Gateway", type: "Gateway", detail: "Ingress layer for API and traffic routing." },
-      { name: "Identity Service", type: "Service", detail: "Handles authentication and token issuance." },
-      { name: "Billing Engine", type: "Service", detail: "Processes invoicing and subscription events." },
-      { name: "Analytics Store", type: "Database", detail: "Stores telemetry and operational metrics." },
-    ],
-    dependencies: [
-      { source: "Edge Gateway", target: "Identity Service", detail: "OAuth handoff and policy checks." },
-      { source: "Billing Engine", target: "Analytics Store", detail: "Writes billing events and usage metrics." },
-      { source: "Identity Service", target: "Analytics Store", detail: "Audits access decisions and sign-ins." },
-    ],
-    risks: [
-      { severity: "High", title: "Unencrypted service traffic", description: "Some internal links still rely on non-TLS channels for legacy integrations." },
-      { severity: "Medium", title: "Single point of failure", description: "The billing service has limited redundancy for peak traffic bursts." },
-      { severity: "Low", title: "Observability gaps", description: "A few critical dependencies lack full tracing coverage." },
-    ],
-    recommendations: [
-      { title: "Enforce mutual TLS", description: "Secure service-to-service communication across all internal routes." },
-      { title: "Introduce autoscaling", description: "Scale billing and identity services during demand spikes." },
-      { title: "Add deeper tracing", description: "Instrument dependencies with distributed tracing and alerting." },
-    ],
+  const [analysis] = useState(() => loadAnalysis());
+  const [why, setWhy] = useState<string | null>(null);
+  const [loadingWhy, setLoadingWhy] = useState(false);
+  const metadata = analysis.Metadata || demoAnalysis.Metadata!;
+  const health = analysis.Health || demoAnalysis.Health!;
+  const askWhy = async (risk: (typeof analysis.Risks)[number]) => {
+    setLoadingWhy(true); setWhy(null);
+    try { const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/insights/why`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ insight: risk }) }); const data = await res.json(); setWhy(data.explanation); }
+    catch { setWhy(risk.rationale || "This conclusion is based on relationships and labels found across the uploaded engineering assets."); }
+    finally { setLoadingWhy(false); }
   };
-
-  const statCards = [
-    {
-      title: "System Summary",
-      value: "Distributed Platform",
-      subtitle: "Multi-region deployment with resilient edge traffic handling",
-      icon: Server,
-      color: "text-indigo-400",
-      bg: "bg-indigo-500/10",
-      border: "border-indigo-500/20",
-    },
-    {
-      title: "Components",
-      value: "4 Core Nodes",
-      subtitle: "Gateway, services, and data layer identified",
-      icon: Cpu,
-      color: "text-emerald-400",
-      bg: "bg-emerald-500/10",
-      border: "border-emerald-500/20",
-    },
-    {
-      title: "Dependencies",
-      value: "3 Active Links",
-      subtitle: "Validated service interactions and data pathways",
-      icon: Workflow,
-      color: "text-cyan-400",
-      bg: "bg-cyan-500/10",
-      border: "border-cyan-500/20",
-    },
-    {
-      title: "Risk Signals",
-      value: "3 Findings",
-      subtitle: "Security and reliability issues surfaced",
-      icon: AlertTriangle,
-      color: "text-yellow-400",
-      bg: "bg-yellow-500/10",
-      border: "border-yellow-500/20",
-    },
-  ];
-
-  return (
-    <DashboardLayout>
-      <div className="space-y-8">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-white mb-2">Gemma Analysis Dashboard</h1>
-            <p className="text-zinc-400 text-sm">
-              Structured review output with polished cards for the uploaded system assets.
-            </p>
-          </div>
-          <Link href="/graph">
-            <span className="px-4 py-2 rounded-lg bg-white text-black text-sm font-semibold hover:bg-zinc-200 transition-all flex items-center gap-1.5 cursor-pointer">
-              View Knowledge Graph <ArrowUpRight className="w-4 h-4" />
-            </span>
-          </Link>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
-          {statCards.map((card, index) => {
-            const Icon = card.icon;
-            return (
-              <motion.div
-                key={card.title}
-                initial={{ opacity: 0, y: 14 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.35, delay: index * 0.08 }}
-                whileHover={{ y: -4, scale: 1.01 }}
-                className={`p-5 rounded-2xl border bg-zinc-950/45 ${card.border} shadow-[0_0_0_1px_rgba(255,255,255,0.02)]`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs uppercase tracking-[0.2em] text-zinc-500">{card.title}</span>
-                  <div className={`p-2 rounded-xl ${card.bg} ${card.color}`}>
-                    <Icon className="w-4 h-4" />
-                  </div>
-                </div>
-                <div className="mt-5">
-                  <h3 className="text-lg font-semibold text-white">{card.value}</h3>
-                  <p className="mt-1 text-sm text-zinc-500">{card.subtitle}</p>
-                </div>
-              </motion.div>
-            );
-          })}
-        </div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
-          className="rounded-3xl border border-zinc-800 bg-gradient-to-br from-zinc-950/90 via-zinc-900/70 to-zinc-950/70 p-6 shadow-[0_20px_80px_rgba(0,0,0,0.35)]"
-        >
-          <div className="flex items-center gap-2 mb-4">
-            <Sparkles className="w-4 h-4 text-indigo-400" />
-            <h2 className="text-sm font-semibold uppercase tracking-[0.25em] text-zinc-400">System Summary</h2>
-          </div>
-          <p className="text-lg text-zinc-200 leading-8">{gemmaOutput.summary}</p>
-        </motion.div>
-
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          <motion.div
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.1 }}
-            whileHover={{ y: -4, scale: 1.01 }}
-            className="rounded-3xl border border-zinc-800 bg-zinc-950/50 p-6"
-          >
-            <div className="flex items-center gap-2 mb-5">
-              <Code2 className="w-4 h-4 text-emerald-400" />
-              <h3 className="text-sm font-semibold text-white">Components</h3>
-            </div>
-            <div className="space-y-3">
-              {gemmaOutput.components.map((component) => (
-                <div key={component.name} className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold text-white">{component.name}</p>
-                      <p className="text-xs text-zinc-500">{component.type}</p>
-                    </div>
-                    <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-400">
-                      Active
-                    </span>
-                  </div>
-                  <p className="mt-2 text-sm text-zinc-400">{component.detail}</p>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.15 }}
-            whileHover={{ y: -4, scale: 1.01 }}
-            className="rounded-3xl border border-zinc-800 bg-zinc-950/50 p-6"
-          >
-            <div className="flex items-center gap-2 mb-5">
-              <Workflow className="w-4 h-4 text-cyan-400" />
-              <h3 className="text-sm font-semibold text-white">Dependencies</h3>
-            </div>
-            <div className="space-y-3">
-              {gemmaOutput.dependencies.map((dependency) => (
-                <div key={`${dependency.source}-${dependency.target}`} className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-4">
-                  <p className="text-sm font-semibold text-white">{dependency.source} → {dependency.target}</p>
-                  <p className="mt-2 text-sm text-zinc-400">{dependency.detail}</p>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-        </div>
-
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          <motion.div
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.2 }}
-            whileHover={{ y: -4, scale: 1.01 }}
-            className="rounded-3xl border border-zinc-800 bg-zinc-950/50 p-6"
-          >
-            <div className="flex items-center gap-2 mb-5">
-              <Lock className="w-4 h-4 text-rose-400" />
-              <h3 className="text-sm font-semibold text-white">Risk Analysis</h3>
-            </div>
-            <div className="space-y-3">
-              {gemmaOutput.risks.map((risk) => (
-                <div key={risk.title} className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-semibold text-white">{risk.title}</p>
-                    <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] ${
-                      risk.severity === "High"
-                        ? "bg-rose-500/10 text-rose-400"
-                        : risk.severity === "Medium"
-                        ? "bg-amber-500/10 text-amber-400"
-                        : "bg-sky-500/10 text-sky-400"
-                    }`}>
-                      {risk.severity}
-                    </span>
-                  </div>
-                  <p className="mt-2 text-sm text-zinc-400">{risk.description}</p>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.25 }}
-            whileHover={{ y: -4, scale: 1.01 }}
-            className="rounded-3xl border border-zinc-800 bg-zinc-950/50 p-6"
-          >
-            <div className="flex items-center gap-2 mb-5">
-              <Lightbulb className="w-4 h-4 text-yellow-400" />
-              <h3 className="text-sm font-semibold text-white">Recommendations</h3>
-            </div>
-            <div className="space-y-3">
-              {gemmaOutput.recommendations.map((recommendation) => (
-                <div key={recommendation.title} className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                    <p className="text-sm font-semibold text-white">{recommendation.title}</p>
-                  </div>
-                  <p className="text-sm text-zinc-400">{recommendation.description}</p>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-        </div>
-      </div>
-    </DashboardLayout>
-  );
+  const stages = ["Reading Files", "Extracting Text", "Understanding Diagrams", "Finding Relationships", "Reasoning Across Documents", "Generating Documentation", "Completed"];
+  return <DashboardLayout><div className="mx-auto max-w-7xl space-y-6">
+    <section className="flex flex-col gap-4 rounded-3xl border border-zinc-800 bg-gradient-to-br from-indigo-500/10 via-zinc-950 to-zinc-950 p-6 lg:flex-row lg:items-center lg:justify-between">
+      <div><div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[.2em] text-indigo-300"><BrainCircuit className="h-4 w-4" /> Gemma Reasoning</div><h1 className="text-2xl font-bold text-white">One system understanding, across {metadata.files_processed?.length || 0} artifacts.</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-400">{analysis.Summary}</p></div>
+      <Link href="/graph" className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-black hover:bg-zinc-200">Explore graph <ArrowUpRight className="h-4 w-4" /></Link>
+    </section>
+    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      {[[FileStack, "Files processed", String(metadata.files_processed?.length || 0)], [Cpu, "Components", String(analysis.Components.length)], [GitBranch, "Relationships", String(analysis.Relationships.length)], [AlertTriangle, "Risk signals", String(analysis.Risks.length)], [Clock3, "Processing", `${((metadata.processing_time_ms || 0) / 1000).toFixed(1)}s`]].map(([Icon, label, value]) => { const I = Icon as typeof Cpu; return <div key={String(label)} className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4"><I className="h-4 w-4 text-indigo-400" /><p className="mt-4 text-xl font-bold text-white">{value as string}</p><p className="text-xs text-zinc-500">{label as string}</p></div>; })}
+    </section>
+    <section className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-sm font-semibold text-white">Reasoning timeline</h2><p className="mt-1 text-xs text-zinc-500">Model: {metadata.model || "Gemma 4"} · overall confidence {metadata.confidence || 0}%</p></div><span className="inline-flex items-center gap-1 text-xs text-emerald-400"><CheckCircle2 className="h-4 w-4" /> Complete</span></div><div className="mt-5 grid gap-2 md:grid-cols-7">{stages.map((stage, index) => <div key={stage} className="flex items-center gap-2 text-[11px] text-zinc-300"><span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-500/20 text-indigo-300">{index + 1}</span>{stage}</div>)}</div></section>
+    <section className="grid gap-6 xl:grid-cols-[1.2fr_.8fr]"><div className="rounded-3xl border border-zinc-800 bg-zinc-950/60 p-6"><div className="flex items-center justify-between"><h2 className="text-lg font-bold text-white">Discovered components</h2><span className={`rounded-full border px-2 py-1 text-[10px] font-bold ${confidenceStyle(metadata.confidence)}`}>{metadata.confidence}% confidence</span></div><div className="mt-4 space-y-3">{analysis.Components.map((component) => <div key={component.name} className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-semibold text-white">{component.name}</p><p className="mt-1 text-xs text-zinc-500">{component.type} · {component.technology || "Technology not identified"}</p></div><span className={`rounded-full border px-2 py-1 text-[10px] font-semibold ${confidenceStyle(component.confidence)}`}>{component.confidence || 0}%</span></div><p className="mt-2 text-sm text-zinc-400">{component.description || component.detail}</p></div>)}</div></div>
+      <div className="rounded-3xl border border-zinc-800 bg-zinc-950/60 p-6"><div className="flex items-center gap-2"><Activity className="h-5 w-5 text-emerald-400" /><h2 className="text-lg font-bold text-white">Architecture health</h2></div><div className="mt-5 flex items-center gap-5"><div className="flex h-24 w-24 items-center justify-center rounded-full border-8 border-indigo-500/40 text-2xl font-bold text-white">{health.overall}</div><p className="text-sm text-zinc-400">Overall score reflects evidence found across the complete workspace.</p></div><div className="mt-6 space-y-3">{Object.entries(health).filter(([name]) => name !== "overall").map(([name, score]) => <div key={name}><div className="mb-1 flex justify-between text-xs text-zinc-400"><span className="capitalize">{name}</span><span>{score}</span></div><div className="h-1.5 overflow-hidden rounded-full bg-zinc-800"><div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-emerald-400" style={{ width: `${score}%` }} /></div></div>)}</div></div></section>
+    <section className="grid gap-6 lg:grid-cols-2"><div className="rounded-3xl border border-zinc-800 bg-zinc-950/60 p-6"><div className="flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-amber-400" /><h2 className="text-lg font-bold text-white">Risk analysis</h2></div><div className="mt-4 space-y-3">{analysis.Risks.map(risk => <div key={risk.title} className="rounded-2xl border border-zinc-800 p-4"><div className="flex justify-between gap-3"><p className="font-semibold text-white">{risk.title}</p><span className="text-xs font-bold text-rose-400">{risk.severity}</span></div><p className="mt-2 text-sm text-zinc-400">{risk.description}</p><button onClick={() => askWhy(risk)} className="mt-3 text-xs font-semibold text-indigo-300 hover:text-white">Why? →</button></div>)}</div></div><div className="rounded-3xl border border-zinc-800 bg-zinc-950/60 p-6"><div className="flex items-center gap-2"><Sparkles className="h-5 w-5 text-indigo-400" /><h2 className="text-lg font-bold text-white">Recommendations</h2></div><div className="mt-4 space-y-3">{analysis.Recommendations.map(item => <div key={item.title} className="rounded-2xl border border-zinc-800 p-4"><p className="font-semibold text-white">{item.title}</p><p className="mt-1 text-sm text-zinc-400">{item.description}</p></div>)}</div></div></section>
+    {why !== null || loadingWhy ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"><div className="max-w-lg rounded-2xl border border-indigo-500/30 bg-zinc-950 p-6 shadow-2xl"><h3 className="font-bold text-white">Why Gemma flagged this</h3><p className="mt-3 text-sm leading-6 text-zinc-300">{loadingWhy ? "Reviewing the cross-document evidence…" : why}</p><button onClick={() => setWhy(null)} className="mt-5 rounded-lg border border-zinc-700 px-3 py-2 text-xs text-zinc-300">Close</button></div></div> : null}
+  </div></DashboardLayout>;
 }

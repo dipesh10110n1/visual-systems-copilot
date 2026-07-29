@@ -6,6 +6,7 @@ import { UploadCloud, FileText, CheckCircle2, RefreshCw, Trash2, Sparkles, Alert
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ToastProvider";
+import { demoAnalysis } from "@/lib/analysis";
 
 interface UploadedFileState {
   id: string;
@@ -132,9 +133,6 @@ export default function UploadPage() {
 
       pushToast({ title: "Upload complete", description: "Your assets were accepted by the backend.", type: "success" });
 
-      setAnalysisPhase("Reading Files...");
-      await new Promise((resolve) => setTimeout(resolve, 900));
-
       const analyzeResponse = await fetch(`${apiUrl}/analyze`, {
         method: "POST",
       });
@@ -143,10 +141,14 @@ export default function UploadPage() {
         throw new Error("Analysis failed");
       }
 
-      pushToast({ title: "Analysis initiated", description: "The workspace is being summarized for the dashboard.", type: "info" });
-
-      setAnalysisPhase("Analyzing...");
-      await new Promise((resolve) => setTimeout(resolve, 900));
+      const analysis = await analyzeResponse.json();
+      const stages = ["Reading Files", "Extracting Text", "Understanding Diagrams", "Finding Relationships", "Reasoning Across Documents", "Generating Documentation"];
+      for (const stage of stages) {
+        setAnalysisPhase(stage);
+        await new Promise((resolve) => setTimeout(resolve, 360));
+      }
+      localStorage.setItem("vsc-analysis", JSON.stringify(analysis));
+      pushToast({ title: "Unified analysis complete", description: "Gemma has connected the evidence across your entire workspace.", type: "success" });
 
       setAnalysisPhase("Completed");
       await new Promise((resolve) => setTimeout(resolve, 500));
@@ -158,6 +160,12 @@ export default function UploadPage() {
       setIsAnalyzing(false);
       setAnalysisPhase("Idle");
     }
+  };
+
+  const handleDemo = () => {
+    localStorage.setItem("vsc-analysis", JSON.stringify(demoAnalysis));
+    pushToast({ title: "Demo workspace loaded", description: "Sample architecture, network, UML, whiteboard, and PDF context is ready.", type: "success" });
+    router.push("/dashboard");
   };
 
   const summaryPills = useMemo(() => [
@@ -186,6 +194,7 @@ export default function UploadPage() {
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
+              <button onClick={handleDemo} className="rounded-full border border-indigo-500/30 bg-indigo-500/10 px-3 py-1.5 text-[11px] font-medium text-indigo-200 hover:bg-indigo-500/20">Try Demo</button>
               {summaryPills.map((pill) => (
                 <span key={pill.label} className="rounded-full border border-zinc-800 bg-zinc-950/70 px-3 py-1.5 text-[11px] font-medium text-zinc-300">
                   {pill.label}: <span className="text-white">{pill.value}</span>
@@ -325,7 +334,7 @@ export default function UploadPage() {
               {isAnalyzing ? (
                 <div className="flex items-center gap-3 rounded-full border border-zinc-800 bg-zinc-900/70 px-4 py-2 text-sm text-zinc-300">
                   <RefreshCw className="h-4 w-4 animate-spin" />
-                  <span>{analysisPhase}</span>
+                  <span>{analysisPhase}{analysisPhase !== "Completed" ? "…" : ""}</span>
                 </div>
               ) : (
                 <button
